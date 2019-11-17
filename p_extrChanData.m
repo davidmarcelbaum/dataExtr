@@ -1,27 +1,40 @@
-%--------------------------------------------------------------------------
-% This script extracts data points from EEG recordings saved in EEGLAB
-% format. Extracted information includes: data points, number of trials,
-% sample rate, seconds before and after trigger, time values, number of
-% time points, name and path of file of origin.
-%--------------------------------------------------------------------------
+%-------------------------------------------------------------------------%
+% This script extracts data points from EEG recordings saved in EEGLAB    %
+% format. Extracted information includes: data points, number of trials,  %
+% sample rate, seconds before and after trigger, time values, number of   %
+% time points, name and path of file of origin.                           %
+%-------------------------------------------------------------------------%
 
-%% Prerequisities
+%% Set up user land
 if contains(computer,'PCWIN') == 1
     slashSys = '\';
 else
     slashSys = '/';
 end
 
-% Build save path for result saving at end
-if ~exist(strcat(cd, slashSys, 'DataChan'),'dir')
-    mkdir(strcat(cd, slashSys, 'DataChan'))
-end
-savePath = strcat(cd, slashSys, 'DataChan', slashSys);
-
-%% Set up user land
 pathName = strcat(uigetdir(cd,'Choose the folder that contains the datasets'),slashSys);
 
 FilesList = dir([pathName,'*.set']);
+
+if contains(FilesList(1).name,'Selected')
+    
+    str_del = 'Selected';
+    dataType = 'Epoched';
+    saveFolder = 'DataChan';
+   
+elseif contains(FilesList(1).name,'ICA')
+    
+    str_del = 'ICA';
+    dataType = 'Whole';
+    saveFolder = 'WholeChanData';
+    
+end
+
+% Build save path for result saving at end
+if ~exist(strcat(cd, slashSys, saveFolder),'dir')
+    mkdir(strcat(cd, slashSys, saveFolder))
+end
+savePath = strcat(cd, slashSys, saveFolder, slashSys);
 
 looped = 0;
 
@@ -45,26 +58,35 @@ for Filenum = 1:numel(FilesList) %Loop going from the 1st element in the folder,
     EEG = eeg_checkset( EEG );
     
     for i = 1:size(EEG.chanlocs,2)
-        Channel.Labels{i,1} = EEG.chanlocs(i).labels;
+        Labels{i,1} = EEG.chanlocs(i).labels;
     end
     
-    Channel.Data = EEG.data; % Contains data points
-    Channel.Trials = EEG.trials; % Number of trials
-    Channel.Srate = EEG.srate; % Sample rate
-    Channel.TrialStart = EEG.xmin; % seconds before trigger
-    Channel.TrialEnd = EEG.xmax; % seconds after trigger
-    Channel.Times = EEG.times; % time values of whole set
-    Channel.Pnts = EEG.pnts; % Number of time points per trial
-    Channel.Filename = FilesList(Filenum).name; % file name
-    Channel.Origin = strcat(EEG.filepath, FilesList(Filenum).name); % where...
+    Data = EEG.data; % Contains data points
+    Trials = EEG.trials; % Number of trials
+    Srate = EEG.srate; % Sample rate
+    TrialStart = EEG.xmin; % seconds before trigger
+    TrialEnd = EEG.xmax; % seconds after trigger
+    Times = EEG.times; % time values of whole set
+    Pnts = EEG.pnts; % Number of time points per trial
+    Filename = FilesList(Filenum).name; % file name
+    Origin = strcat(EEG.filepath, FilesList(Filenum).name); % where...
     % do the channels have been extracted from
     
     % Build name of file to save
-    saveName = insertAfter(FilesList(Filenum).name,'sleep_','ChanDat_');
-    saveName = replace(saveName,'On.set','.mat');
+    saveName = insertAfter(FilesList(Filenum).name,'sleep_',...
+        [dataType,'ChanDat_']);
     
-    save(strcat(savePath, saveName), 'Channel');
+    saveName = extractBefore(saveName,['_',str_del]);
+            
+%     saveName = replace(saveName,'.set','.mat');
+
+    saveName = strcat(saveName,'.mat');
     
+%     save(strcat(savePath, saveName), 'Channel', '-v7.3');
+    save(strcat(savePath, saveName), 'Labels', 'Data', 'Trials', 'Srate',...
+        'TrialStart', 'TrialEnd', 'Times', 'Pnts', 'Filename', 'Origin',...
+        '-v7.3');
+
     clear EEG saveName Channel
     
     looped = looped + 1;
