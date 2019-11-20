@@ -2,14 +2,19 @@
 % This script extracts data points from EEG recordings saved in EEGLAB    %
 % format. Extracted information includes: data points, number of trials,  %
 % sample rate, seconds before and after trigger, time values, number of   %
-% time points, name and path of file of origin.                           %
+% time points, name and path of file of origin as well as trigger         %
+% latencies.                                                              %
 %-------------------------------------------------------------------------%
 
 %% Set up user land
 if contains(computer,'PCWIN') == 1
+    
     slashSys = '\';
+    
 else
+    
     slashSys = '/';
+    
 end
 
 pathName = strcat(uigetdir(cd,'Choose the folder that contains the datasets'),slashSys);
@@ -26,14 +31,17 @@ elseif contains(FilesList(1).name,'ICA')
     
     str_del = 'ICA';
     dataType = 'Whole';
-    saveFolder = 'WholeChanData';
+    saveFolder = 'DataWholeChan';
     
 end
 
 % Build save path for result saving at end
 if ~exist(strcat(cd, slashSys, saveFolder),'dir')
+    
     mkdir(strcat(cd, slashSys, saveFolder))
+    
 end
+
 savePath = strcat(cd, slashSys, saveFolder, slashSys);
 
 looped = 0;
@@ -56,9 +64,38 @@ for Filenum = 1:numel(FilesList) %Loop going from the 1st element in the folder,
     %Stores daataset in first (0) slot.
     [ALLEEG, EEG, CURRENTSET] = eeg_store( ALLEEG, EEG, 0 );
     EEG = eeg_checkset( EEG );
+                
+    Labels = {EEG.chanlocs(:).labels};
     
-    for i = 1:size(EEG.chanlocs,2)
-        Labels{i,1} = EEG.chanlocs(i).labels;
+    if strcmp(dataType,'Whole')
+        
+        % ADS: Separar por DIN1 y DIN2
+        All_DIN1 = find(strcmp({EEG.event.code},'DIN1'));
+        All_DIN2 = find(strcmp({EEG.event.code},'DIN2'));
+        
+        % ADS: Separar por pares e impares
+        get_cidx= {EEG.event.mffkey_cidx};
+        
+        Placebo_Epochs = find(mod(str2double(get_cidx),2)==0);
+        Odor_Epochs = find(mod(str2double(get_cidx),2)~= 0);
+        
+        [OdorOn] = intersect(All_DIN1,Odor_Epochs);
+        [PlaceboOn] = intersect(All_DIN1,Placebo_Epochs);
+        
+        EventNumbers_Odor = OdorOn;
+        EventNumbers_Placebo = PlaceboOn;
+        Latencies_Odor = [EEG.event(OdorOn).latency];
+        Latencies_Placebo = [EEG.event(PlaceboOn).latency];
+        Events = EEG.event; % Hold all trigger info in case need later!
+        
+    elseif strcmp(dataType,'Epoched')
+        
+        EventNumbers_Odor = NaN;
+        EventNumbers_Placebo = NaN;
+        Latencies_Odor = NaN;
+        Latencies_Placebo = NaN;
+        Events = NaN;
+        
     end
     
     Data = EEG.data; % Contains data points
@@ -77,23 +114,27 @@ for Filenum = 1:numel(FilesList) %Loop going from the 1st element in the folder,
         [dataType,'ChanDat_']);
     
     saveName = extractBefore(saveName,['_',str_del]);
-            
-%     saveName = replace(saveName,'.set','.mat');
-
+           
     saveName = strcat(saveName,'.mat');
     
-%     save(strcat(savePath, saveName), 'Channel', '-v7.3');
     save(strcat(savePath, saveName), 'Labels', 'Data', 'Trials', 'Srate',...
         'TrialStart', 'TrialEnd', 'Times', 'Pnts', 'Filename', 'Origin',...
+        'EventNumbers_Placebo', 'EventNumbers_Odor', 'Latencies_Placebo', ...
+        'Latencies_Odor', 'Events', ...
         '-v7.3');
 
     clear EEG saveName Channel
     
+    close all
+    
     looped = looped + 1;
+    
 end
 
 close all
 
 if numel(FilesList) == looped
-   fprintf('Done. Computed %d datasets.', looped)
+    
+   fprintf('Done. Saved %d datasets in %s.', looped, savePath)
+   
 end
