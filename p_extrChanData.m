@@ -21,17 +21,18 @@ pathName = strcat(uigetdir(cd,'Choose the folder that contains the datasets'),sl
 
 FilesList = dir([pathName,'*.set']);
 
-if contains(FilesList(1).name,'Selected')
-    
-    str_del = 'Selected';
-    dataType = 'Epoched';
-    saveFolder = 'DataChan';
    
-elseif contains(FilesList(1).name,'ICA')
+if contains(FilesList(1).name,'ICA')
     
     str_del = 'ICA';
     dataType = 'Whole';
     saveFolder = 'DataWholeChan';
+    
+else 
+    
+    str_del = 'Selected';
+    dataType = 'Epoched';
+    saveFolder = 'DataChan';
     
 end
 
@@ -113,9 +114,17 @@ for Filenum = 1:numel(FilesList) %Loop going from the 1st element in the folder,
     saveName = insertAfter(FilesList(Filenum).name,'sleep_',...
         [dataType,'ChanDat_']);
     
-    saveName = extractBefore(saveName,['_',str_del]);
-           
-    saveName = strcat(saveName,'.mat');
+    if contains(saveName,'.set')
+        
+        saveName = strrep(saveName, '.set', '.mat');
+        
+    else
+        
+        saveName = extractBefore(saveName,['_',str_del]);
+        
+        saveName = strcat(saveName,'.mat');
+        
+    end
     
     save(strcat(savePath, saveName), 'Labels', 'Data', 'Trials', 'Srate',...
         'TrialStart', 'TrialEnd', 'Times', 'Pnts', 'Filename', 'Origin',...
