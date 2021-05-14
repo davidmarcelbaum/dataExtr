@@ -4,7 +4,7 @@
 filepath = ['D:\Google Drive\Sleep_Study_Germany\BehavioralMeasures\', ...
     'TextDateien_Tasks'];
 
-filesOI = 'Memory Abfrage';
+filesOI = 'Interferenz Lernen';
 
 objects = {...
     'apfel1', ...
@@ -62,6 +62,9 @@ files = dir(filepath);
 % Retain only file types of interest
 files = files(contains({files.name}, filesOI));
 
+idx_nonFile = find(contains({files.name}, 'Comments on this version'));
+files(idx_nonFile) = [];
+
 load(nonCharFile)
 
 
@@ -110,7 +113,7 @@ for i_fl = 1:length(files)
     scanned_text    = strrep(scanned_text, ' ', '');
     
     
-    str_extr  = char(extractBetween(files(i_fl).name, 'Abfrage ', '.txt'));
+    str_extr  = char(extractBetween(files(i_fl).name, 'Lernen ', '.txt'));
     
     subject   = extractBetween(str_extr, '-', '-');
     night     = str2double(str_extr(end));
@@ -194,6 +197,98 @@ for i_fl = 1:length(files)
 end
 
 
-% Save table in excel
+
+%% Save table in excel format
+%  ------------------------------------------------------------------------
+
 str_save = strcat(filesOI, '.xlsx');
 writetable(out_resp, str_save, 'Sheet', 1)
+
+
+
+%% Manual analysis (constantly changing)
+%  ------------------------------------------------------------------------
+t_out.Responses.(char(erase(filesOI, ' '))) = out_resp;
+t_out.ReactionT.(char(erase(filesOI, ' '))) = out_reac;
+
+
+MemLearn = table2array(t_out.Responses.MemoryLernen);
+MemAbfra = table2array(t_out.Responses.MemoryAbfrage);
+MemGains = cellfun(@minus, MemAbfra, MemLearn, 'UniformOutput', false);
+
+t_out.Responses.MemoryChange = cell2table(MemGains, ...
+    'VariableNames', t_out.Responses.MemoryLernen.Properties.VariableNames, ...
+    'RowNames', t_out.Responses.MemoryLernen.Properties.RowNames);
+
+IntLearn = table2array(t_out.Responses.InterferenzLernen);
+IntAbfra = table2array(t_out.Responses.InterferenzAbfrage);
+IntGains = cellfun(@minus, IntAbfra, IntLearn, 'UniformOutput', false);
+
+t_out.Responses.InterferenzChange = cell2table(IntGains, ...
+    'VariableNames', t_out.Responses.MemoryLernen.Properties.VariableNames, ...
+    'RowNames', t_out.Responses.MemoryLernen.Properties.RowNames);
+    
+str_save = strcat('MemoryChange.xlsx');
+writetable(t_out.Responses.MemoryChange, str_save, 'Sheet', 1)
+
+str_save = strcat('InterferenzChange.xlsx');
+writetable(t_out.Responses.InterferenzChange, str_save, 'Sheet', 1)
+
+
+
+%% Calculate performances (Lernen vs Abfrage)
+%  ------------------------------------------------------------------------
+
+% Memory
+% ------
+
+idx_CueD = find(contains(...
+    t_out.Responses.MemoryLernen.Properties.RowNames, 'CueD'));
+idx_CueM = find(contains(...
+    t_out.Responses.MemoryLernen.Properties.RowNames, 'CueM'));
+
+iD = 0;
+iM = 0;
+for i_subj = 1:size(MemGains, 1)
+    if ismember(i_subj, idx_CueD)
+        iD = iD + 1;
+        MemPerf(iD).CueD = ...
+            nanmean(cellfun(@mean, MemAbfra(i_subj, :))) / ...
+            nanmean(cellfun(@mean, MemLearn(i_subj, :)));
+        MemChng(iD).CueD = nanmean(cellfun(@mean, MemGains(i_subj, :)));
+    elseif ismember(i_subj, idx_CueM)
+        iM = iM + 1;
+        MemPerf(iM).CueM = ...
+            nanmean(cellfun(@mean, MemAbfra(i_subj, :))) / ...
+            nanmean(cellfun(@mean, MemLearn(i_subj, :)));
+        MemChng(iM).CueM = nanmean(cellfun(@mean, MemGains(i_subj, :)));
+    end
+end
+
+
+% Interf
+% ------
+
+idx_CueD = find(contains(...
+    t_out.Responses.InterferenzLernen.Properties.RowNames, 'CueD'));
+idx_CueM = find(contains(...
+    t_out.Responses.InterferenzLernen.Properties.RowNames, 'CueM'));
+
+iD = 0;
+iM = 0;
+for i_subj = 1:size(IntGains, 1)
+    if ismember(i_subj, idx_CueD)
+        iD = iD + 1;
+        IntPerf(iD).CueD = ...
+            nanmean(cellfun(@mean, IntAbfra(i_subj, :))) / ...
+            nanmean(cellfun(@mean, IntLearn(i_subj, :)));
+        IntChng(iD).CueD = nanmean(cellfun(@mean, IntGains(i_subj, :)));
+    elseif ismember(i_subj, idx_CueM)
+        iM = iM + 1;
+        IntPerf(iM).CueM = ...
+            nanmean(cellfun(@mean, IntAbfra(i_subj, :))) / ...
+            nanmean(cellfun(@mean, IntLearn(i_subj, :)));
+        IntChng(iM).CueM = nanmean(cellfun(@mean, IntGains(i_subj, :)));
+    end
+end
+
