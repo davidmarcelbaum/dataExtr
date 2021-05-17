@@ -214,81 +214,118 @@ t_out.ReactionT.(char(erase(filesOI, ' '))) = out_reac;
 
 MemLearn = table2array(t_out.Responses.MemoryLernen);
 MemAbfra = table2array(t_out.Responses.MemoryAbfrage);
-MemGains = cellfun(@minus, MemAbfra, MemLearn, 'UniformOutput', false);
 
-t_out.Responses.MemoryChange = cell2table(MemGains, ...
-    'VariableNames', t_out.Responses.MemoryLernen.Properties.VariableNames, ...
-    'RowNames', t_out.Responses.MemoryLernen.Properties.RowNames);
+if any(size(MemLearn) ~= size(MemAbfra))
+    error('Mismatch in tables')
+else
+    MemGain = cell(size(MemAbfra));
+end
 
-IntLearn = table2array(t_out.Responses.InterferenzLernen);
-IntAbfra = table2array(t_out.Responses.InterferenzAbfrage);
-IntGains = cellfun(@minus, IntAbfra, IntLearn, 'UniformOutput', false);
-
-t_out.Responses.InterferenzChange = cell2table(IntGains, ...
-    'VariableNames', t_out.Responses.MemoryLernen.Properties.VariableNames, ...
-    'RowNames', t_out.Responses.MemoryLernen.Properties.RowNames);
-    
-str_save = strcat('MemoryChange.xlsx');
-writetable(t_out.Responses.MemoryChange, str_save, 'Sheet', 1)
-
-str_save = strcat('InterferenzChange.xlsx');
-writetable(t_out.Responses.InterferenzChange, str_save, 'Sheet', 1)
+% ---------------------------------- /!\ ----------------------------------
+% We seem to have a problem in numbers of card pairs learned: 17 card paris
+% vs only (correctly) 15 pairs asked during recall
+% - seehund1 (column 17)
+% - eisbaer2 (column 28)
+are_empty = cellfun(@isempty, MemAbfra, 'UniformOutput', false);
+for iRow = 1:size(are_empty, 1)
+    size(are_empty, 2) - sum([are_empty{iRow, :}])
+end
+% -------------------------------------------------------------------------
 
 
-
-%% Calculate performances (Lernen vs Abfrage)
-%  ------------------------------------------------------------------------
-
-% Memory
-% ------
+% In the arrays, 1 singifies the card has been correctly located, 0 that it
+% has not. Here, we will defines as:
+% - Missmiss cards that have not been correctly located either before sleep
+%   (Lernen) nor after sleep (Abfrage)
+% - Hithit cards that have been correctly located during Lernen and Abfrage
+% - Gain cards that have not been located during Lernen but after sleep
+%   during Abfrage
+% - Loss cards that had been located before sleep during Lernen but not
+%   afterwards during Abfrage
 
 idx_CueD = find(contains(...
     t_out.Responses.MemoryLernen.Properties.RowNames, 'CueD'));
 idx_CueM = find(contains(...
     t_out.Responses.MemoryLernen.Properties.RowNames, 'CueM'));
 
-iD = 0;
-iM = 0;
-for i_subj = 1:size(MemGains, 1)
-    if ismember(i_subj, idx_CueD)
-        iD = iD + 1;
-        MemPerf(iD).CueD = ...
-            nanmean(cellfun(@mean, MemAbfra(i_subj, :))) / ...
-            nanmean(cellfun(@mean, MemLearn(i_subj, :)));
-        MemChng(iD).CueD = nanmean(cellfun(@mean, MemGains(i_subj, :)));
-    elseif ismember(i_subj, idx_CueM)
-        iM = iM + 1;
-        MemPerf(iM).CueM = ...
-            nanmean(cellfun(@mean, MemAbfra(i_subj, :))) / ...
-            nanmean(cellfun(@mean, MemLearn(i_subj, :)));
-        MemChng(iM).CueM = nanmean(cellfun(@mean, MemGains(i_subj, :)));
-    end
+for iSubj = 1:size(MemLearn, 1)
+        
+        subjLearn = MemLearn(iSubj, :);
+        subjAbfra = MemAbfra(iSubj, :);
+        
+        for iCard = 1:numel(subjLearn)
+           
+            if ( isempty(subjLearn{iCard}) && ...
+                    ~isempty(subjAbfra{iCard}) )%% || ...
+                    %%( ~isempty(subjLearn{iCard}) && ...
+                    %%isempty(subjAbfra{iCard}) )
+                error('Card pair is different between Lernen and Abfrage')
+            end
+            
+            if isempty(subjAbfra{iCard})
+                continue
+            else
+                
+                if subjLearn{iCard} == 0 && subjAbfra{iCard} == 0
+                    MemGain(iSubj, iCard) = {'Missmiss'};
+                elseif subjLearn{iCard} == 1 && subjAbfra{iCard} == 1
+                    MemGain(iSubj, iCard) = {'Hithit'};
+                elseif subjLearn{iCard} == 0 && subjAbfra{iCard} == 1
+                    MemGain(iSubj, iCard) = {'Gain'};
+                elseif subjLearn{iCard} == 1 && subjAbfra{iCard} == 0
+                    MemGain(iSubj, iCard) = {'Loss'};
+                end
+                
+            end
+            
+        end
+end
+are_empty = cellfun(@isempty, MemGain, 'UniformOutput', false);
+for iRow = 1:size(are_empty, 1)
+    size(are_empty, 2) - sum([are_empty{iRow, :}])
 end
 
 
-% Interf
-% ------
-
-idx_CueD = find(contains(...
-    t_out.Responses.InterferenzLernen.Properties.RowNames, 'CueD'));
-idx_CueM = find(contains(...
-    t_out.Responses.InterferenzLernen.Properties.RowNames, 'CueM'));
+% Extract percentage of gains, losses, ...
+% -------------------------------------------------------------------------
 
 iD = 0;
 iM = 0;
-for i_subj = 1:size(IntGains, 1)
-    if ismember(i_subj, idx_CueD)
+for iSubj = 1:size(MemGain, 1)
+    
+    if ismember(iSubj, idx_CueD)
         iD = iD + 1;
-        IntPerf(iD).CueD = ...
-            nanmean(cellfun(@mean, IntAbfra(i_subj, :))) / ...
-            nanmean(cellfun(@mean, IntLearn(i_subj, :)));
-        IntChng(iD).CueD = nanmean(cellfun(@mean, IntGains(i_subj, :)));
-    elseif ismember(i_subj, idx_CueM)
+        
+        Cards.CueD(iD).Hithit = ...
+            sum(strcmp(MemGain(iSubj, :), 'Hithit')) / ...
+            15;
+        Cards.CueD(iD).Missmiss = ...
+            sum(strcmp(MemGain(iSubj, :), 'Missmiss')) / ...
+            15;
+        Cards.CueD(iD).Gain = ...
+            sum(strcmp(MemGain(iSubj, :), 'Gain')) / ...
+            15;
+        Cards.CueD(iD).Loss = ...
+            sum(strcmp(MemGain(iSubj, :), 'Loss')) / ...
+            15;
+        
+    elseif ismember(iSubj, idx_CueM)
         iM = iM + 1;
-        IntPerf(iM).CueM = ...
-            nanmean(cellfun(@mean, IntAbfra(i_subj, :))) / ...
-            nanmean(cellfun(@mean, IntLearn(i_subj, :)));
-        IntChng(iM).CueM = nanmean(cellfun(@mean, IntGains(i_subj, :)));
+        
+        Cards.CueM(iM).Hithit = ...
+            sum(strcmp(MemGain(iSubj, :), 'Hithit')) / ...
+            15;
+        Cards.CueM(iM).Missmiss = ...
+            sum(strcmp(MemGain(iSubj, :), 'Missmiss')) / ...
+            15;
+        Cards.CueM(iM).Gain = ...
+            sum(strcmp(MemGain(iSubj, :), 'Gain')) / ...
+            15;
+        Cards.CueM(iM).Loss = ...
+            sum(strcmp(MemGain(iSubj, :), 'Loss')) / ...
+            15;
+        
     end
+    
 end
 
