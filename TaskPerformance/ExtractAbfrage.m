@@ -4,7 +4,7 @@
 filepath = ['D:\Google Drive\Sleep_Study_Germany\BehavioralMeasures\', ...
     'TextDateien_Tasks'];
 
-filesOI = 'Interferenz Lernen';
+filesOI = 'Memory Abfrage';
 
 objects = {...
     'apfel1', ...
@@ -113,7 +113,7 @@ for i_fl = 1:length(files)
     scanned_text    = strrep(scanned_text, ' ', '');
     
     
-    str_extr  = char(extractBetween(files(i_fl).name, 'Lernen ', '.txt'));
+    str_extr  = char(extractBetween(files(i_fl).name, 'Abfrage ', '.txt'));
     
     subject   = extractBetween(str_extr, '-', '-');
     night     = str2double(str_extr(end));
@@ -145,11 +145,12 @@ for i_fl = 1:length(files)
     % - CueStimulus.RT which is the response time
     % - LogFrame Start or LogFrame End which are start and end of question
     
-    str_quest_start     = 'LogFrameStart';
+    str_quest_start     = 'LogFrameStart'; % Last one is end game screen
     str_quest_stop      = 'LogFrameEnd';
     str_quest_resp      = 'CueStimulus.ACC:';
     str_quest_reac      = 'CueStimulus.RT:';
     str_quest_type      = 'StimulusFile:Stimuli/';
+    str_last_run        = 'Recalllist:1'; % Beginning of new run
     
     idx_quest_start = find(contains(scanned_text, str_quest_start));
     
@@ -158,15 +159,33 @@ for i_fl = 1:length(files)
         error('Number of trials incorrect')
     end
     
-    idx_quest_resp  = find(contains(scanned_text, str_quest_resp));
-    idx_quest_reac  = find(contains(scanned_text, str_quest_reac));
-    idx_quest_type  = find(contains(scanned_text, str_quest_type));
+    idx_quest_resp      = find(contains(scanned_text, str_quest_resp));
+    idx_quest_reac      = find(contains(scanned_text, str_quest_reac));
+    idx_quest_type      = find(contains(scanned_text, str_quest_type));
+    idx_last_run        = find(strcmp(scanned_text, str_last_run));
+    
+    
+    % Reject all runs before last one
+    % -------------------------------
+    % This is a bit more complex since the line Recalllist:1 comes after
+    % the card that has been asked for
+    start_extraction = 0;
     
     
     %% Going through questions
     for i_qst = 1:numel(idx_quest_start)-1
        
         quest_range = idx_quest_start(i_qst):idx_quest_start(i_qst+1);
+        
+        if ismember(idx_last_run(end), quest_range)
+            % This will be the first card pair of the last run from which
+            % point on we take into the account the outcomes
+            start_extraction = 1;
+        end
+        
+        if start_extraction == 0
+            continue
+        end
         
         
         % Extract trial information
@@ -226,10 +245,14 @@ end
 % vs only (correctly) 15 pairs asked during recall
 % - seehund1 (column 17)
 % - eisbaer2 (column 28)
-are_empty = cellfun(@isempty, MemAbfra, 'UniformOutput', false);
+are_empty = cellfun(@isempty, MemLearn, 'UniformOutput', false);
 for iRow = 1:size(are_empty, 1)
-    size(are_empty, 2) - sum([are_empty{iRow, :}])
+    cards_played(iRow) = size(are_empty, 2) - sum([are_empty{iRow, :}]);
 end
+
+% The problem has been solved by taking into account only card pairs coming
+% after the last "Recalllist:1" line. The two card pairs were dummy
+% questions in order to show the participant how the game works.
 % -------------------------------------------------------------------------
 
 
@@ -256,9 +279,9 @@ for iSubj = 1:size(MemLearn, 1)
         for iCard = 1:numel(subjLearn)
            
             if ( isempty(subjLearn{iCard}) && ...
-                    ~isempty(subjAbfra{iCard}) )%% || ...
-                    %%( ~isempty(subjLearn{iCard}) && ...
-                    %%isempty(subjAbfra{iCard}) )
+                    ~isempty(subjAbfra{iCard}) ) || ...
+                    ( ~isempty(subjLearn{iCard}) && ...
+                    isempty(subjAbfra{iCard}) )
                 error('Card pair is different between Lernen and Abfrage')
             end
             
@@ -282,7 +305,7 @@ for iSubj = 1:size(MemLearn, 1)
 end
 are_empty = cellfun(@isempty, MemGain, 'UniformOutput', false);
 for iRow = 1:size(are_empty, 1)
-    size(are_empty, 2) - sum([are_empty{iRow, :}])
+    cards_played(iRow) = size(are_empty, 2) - sum([are_empty{iRow, :}]);
 end
 
 
