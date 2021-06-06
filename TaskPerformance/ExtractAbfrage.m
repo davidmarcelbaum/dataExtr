@@ -4,7 +4,7 @@
 filepath = ['D:\Google Drive\Sleep_Study_Germany\BehavioralMeasures\', ...
     'TextDateien_Tasks'];
 
-filesOI = 'Memory Abfrage';
+filesOI = 'Memory Lernen';
 
 objects = {...
     'apfel1', ...
@@ -113,7 +113,7 @@ for i_fl = 1:length(files)
     scanned_text    = strrep(scanned_text, ' ', '');
     
     
-    str_extr  = char(extractBetween(files(i_fl).name, 'Abfrage ', '.txt'));
+    str_extr  = char(extractBetween(files(i_fl).name, 'Lernen ', '.txt'));
     
     subject   = extractBetween(str_extr, '-', '-');
     night     = str2double(str_extr(end));
@@ -144,13 +144,14 @@ for i_fl = 1:length(files)
     %   respectively
     % - CueStimulus.RT which is the response time
     % - LogFrame Start or LogFrame End which are start and end of question
+    %   Here, note that last LogFrame Start is the end game screen
     
     str_quest_start     = 'LogFrameStart'; % Last one is end game screen
     str_quest_stop      = 'LogFrameEnd';
     str_quest_resp      = 'CueStimulus.ACC:';
     str_quest_reac      = 'CueStimulus.RT:';
     str_quest_type      = 'StimulusFile:Stimuli/';
-    str_last_run        = 'Recalllist:1'; % Beginning of new run
+    str_run_start       = 'Recalllist:1'; % Beginning of new run
     
     idx_quest_start = find(contains(scanned_text, str_quest_start));
     
@@ -162,8 +163,9 @@ for i_fl = 1:length(files)
     idx_quest_resp      = find(contains(scanned_text, str_quest_resp));
     idx_quest_reac      = find(contains(scanned_text, str_quest_reac));
     idx_quest_type      = find(contains(scanned_text, str_quest_type));
-    idx_last_run        = find(strcmp(scanned_text, str_last_run));
+    idx_run_start       = find(strcmp(scanned_text, str_run_start));
     
+    game_runs(i_fl, 1)  = numel(idx_run_start);
     
     % Reject all runs before last one
     % -------------------------------
@@ -177,7 +179,7 @@ for i_fl = 1:length(files)
        
         quest_range = idx_quest_start(i_qst):idx_quest_start(i_qst+1);
         
-        if ismember(idx_last_run(end), quest_range)
+        if ismember(idx_run_start(end), quest_range)
             % This will be the first card pair of the last run from which
             % point on we take into the account the outcomes
             start_extraction = 1;
@@ -241,13 +243,22 @@ else
 end
 
 % ---------------------------------- /!\ ----------------------------------
-% We seem to have a problem in numbers of card pairs learned: 17 card paris
+%                             C O R R E C T E D
+% We seem to have a problem in numbers of card pairs learned: 17 card pairs
 % vs only (correctly) 15 pairs asked during recall
 % - seehund1 (column 17)
 % - eisbaer2 (column 28)
 are_empty = cellfun(@isempty, MemLearn, 'UniformOutput', false);
 for iRow = 1:size(are_empty, 1)
-    cards_played(iRow) = size(are_empty, 2) - sum([are_empty{iRow, :}]);
+    cards_learn(iRow) = size(are_empty, 2) - sum([are_empty{iRow, :}]);
+end
+are_empty = cellfun(@isempty, MemAbfra, 'UniformOutput', false);
+for iRow = 1:size(are_empty, 1)
+    cards_abfra(iRow) = size(are_empty, 2) - sum([are_empty{iRow, :}]);
+end
+
+if any(cards_learn ~= 15) || any(cards_abfra ~= 15)
+    error('Wrong number of questions')
 end
 
 % The problem has been solved by taking into account only card pairs coming
@@ -256,7 +267,7 @@ end
 % -------------------------------------------------------------------------
 
 
-% In the arrays, 1 singifies the card has been correctly located, 0 that it
+% In the arrays, 1 signifies the card has been correctly located, 0 that it
 % has not. Here, we will defines as:
 % - Missmiss cards that have not been correctly located either before sleep
 %   (Lernen) nor after sleep (Abfrage)
@@ -352,3 +363,98 @@ for iSubj = 1:size(MemGain, 1)
     
 end
 
+Positive.D = sum([Cards.CueD.Hithit; Cards.CueD.Gain], 1);
+Positive.M = sum([Cards.CueM.Hithit; Cards.CueM.Gain], 1);
+
+
+% Get subject-wise accuracies during learning and recall
+% -------------------------------------------------------------------------
+
+iD = 0;
+iM = 0;
+for iSubj = 1:size(MemLearn, 1)
+    
+    if ismember(iSubj, idx_CueD)
+        iD = iD + 1;
+        
+        subject_cards = cell2mat(MemLearn(iSubj, :));
+        if numel(subject_cards) ~= 15
+            error('Wrong number of cards answered')
+        end
+        Accuracy(iD).D = mean(subject_cards);
+        
+    elseif ismember(iSubj, idx_CueM)
+        iM = iM + 1;
+    
+        subject_cards = cell2mat(MemLearn(iSubj, :));
+        if numel(subject_cards) ~= 15
+            error('Wrong number of cards answered')
+        end
+        Accuracy(iM).M = mean(subject_cards);
+    end
+        
+end
+
+iD = 0;
+iM = 0;
+for iSubj = 1:size(MemAbfra, 1)
+    
+    if ismember(iSubj, idx_CueD)
+        iD = iD + 1;
+        
+        subject_cards = cell2mat(MemAbfra(iSubj, :));
+        if numel(subject_cards) ~= 15
+            error('Wrong number of cards answered')
+        end
+        Accuracy(iD).D = mean(subject_cards);
+        
+    elseif ismember(iSubj, idx_CueM)
+        iM = iM + 1;
+    
+        subject_cards = cell2mat(MemAbfra(iSubj, :));
+        if numel(subject_cards) ~= 15
+            error('Wrong number of cards answered')
+        end
+        Accuracy(iM).M = mean(subject_cards);
+    end
+        
+end
+
+
+% Reaction times
+% -------------------------------------------------------------------------
+
+t_out.ReactionT.(char(erase(filesOI, ' '))) = out_reac;
+
+ReaLearn = table2array(t_out.ReactionT.MemoryLernen);
+ReaAbfra = table2array(t_out.ReactionT.MemoryAbfrage);
+
+idx_CueD = find(contains(...
+    t_out.ReactionT.MemoryLernen.Properties.RowNames, 'CueD'));
+idx_CueM = find(contains(...
+    t_out.ReactionT.MemoryLernen.Properties.RowNames, 'CueM'));
+
+
+iD = 0;
+iM = 0;
+for iSubj = 1:46
+    
+    if ismember(iSubj, idx_CueD)
+        iD = iD + 1;
+        
+        mean_ReaLearn(iD).D = mean(cell2mat(ReaLearn(iSubj, :)));
+        mean_ReaAbfra(iD).D = mean(cell2mat(ReaAbfra(iSubj, :)));
+        
+        mean_ReacGain(iD).D = mean_ReaAbfra(iD).D / mean_ReaLearn(iD).D;
+        
+    elseif ismember(iSubj, idx_CueM)
+        iM = iM + 1;
+        
+        mean_ReaLearn(iM).M = mean(cell2mat(ReaLearn(iSubj, :)));
+        mean_ReaAbfra(iM).M = mean(cell2mat(ReaAbfra(iSubj, :)));
+        
+        mean_ReacGain(iM).M = mean_ReaAbfra(iM).M / mean_ReaLearn(iM).M;
+        
+    end
+    
+end
